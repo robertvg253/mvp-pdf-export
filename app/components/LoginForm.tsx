@@ -24,7 +24,9 @@ export default function LoginForm({ error }: LoginFormProps) {
               />
             </div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Panel de Agentes IA
+              Panel de informes
+              <br />
+              COOPE SAN GABRIEL
             </h1>
             <p className="text-gray-600">
               Inicia sesión para acceder al panel de control
@@ -101,7 +103,7 @@ export default function LoginForm({ error }: LoginFormProps) {
           {/* Footer */}
           <div className="mt-6 text-center">
             <p className="text-gray-500 text-sm">
-              Panel de gestión de agentes de inteligencia artificial
+              Panel de informes de contactos de COOPE SAN GABRIEL
             </p>
           </div>
         </div>

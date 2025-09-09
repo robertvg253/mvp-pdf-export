@@ -1,5 +1,6 @@
-import { type LoaderFunctionArgs, useLoaderData, useNavigate, useSearchParams } from "react-router";
+import { type LoaderFunctionArgs, type ActionFunctionArgs, useLoaderData, useNavigate, useSearchParams, redirect, Form } from "react-router";
 import { supabaseAdmin } from "~/supabase/supabaseAdmin";
+import { supabaseServer } from "~/supabase/supabaseServer";
 import React, { useState } from "react";
 import { formatDateForSupabase, formatDate } from "~/utils/date-helpers";
 import ExportModal from "~/components/ExportModal";
@@ -272,8 +273,29 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 }
 
-
-
+// Función action para manejar el logout
+export async function action({ request }: ActionFunctionArgs) {
+  try {
+    console.log("🚪 Iniciando proceso de logout...");
+    
+    // Cerrar sesión usando el cliente de Supabase del servidor
+    const { error } = await supabaseServer.auth.signOut();
+    
+    if (error) {
+      console.error("❌ Error al cerrar sesión:", error);
+      throw new Error(`Error al cerrar sesión: ${error.message}`);
+    }
+    
+    console.log("✅ Sesión cerrada exitosamente");
+    
+    // Redirigir a la página de login
+    return redirect("/");
+  } catch (error) {
+    console.error("❌ Error en action de logout:", error);
+    // Aún así redirigir al login en caso de error
+    return redirect("/");
+  }
+}
 
 export default function DashboardPage() {
   const { contacts, totalCount, currentPage, totalPages, error, campaignContacts, unassignedContacts, uniqueUsers } = useLoaderData<typeof loader>();
@@ -403,7 +425,7 @@ export default function DashboardPage() {
               >
                 <option value="">Todos los canales</option>
                 <option value="whatsapp">WhatsApp</option>
-                <option value="telegram">Telegram</option>
+                <option value="sms">SMS</option>
                 <option value="email">Email</option>
                 <option value="facebook">Facebook</option>
                 <option value="instagram">Instagram</option>
@@ -481,7 +503,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex space-x-2">
               {/* Botón de filtros para móviles */}
-            <button
+              <button 
                 onClick={handleFilterModalOpen}
                 className="md:hidden bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
                 title="Filtrar datos"
@@ -500,10 +522,25 @@ export default function DashboardPage() {
               >
                 <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+                </svg>
                 <span className="hidden sm:inline">Exportar PDF</span>
                 <span className="sm:hidden">PDF</span>
-            </button>
+              </button>
+
+              {/* Botón de cerrar sesión */}
+              <Form method="post" className="inline">
+                <button 
+                  type="submit"
+                  className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+                  title="Cerrar sesión"
+                >
+                  <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  <span className="hidden sm:inline">Cerrar Sesión</span>
+                  <span className="sm:hidden">Salir</span>
+                </button>
+              </Form>
             </div>
         </div>
 

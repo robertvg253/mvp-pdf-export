@@ -112,7 +112,7 @@ export default function FilterModal({
             >
               <option value="">Todos los canales</option>
               <option value="whatsapp">WhatsApp</option>
-              <option value="telegram">Telegram</option>
+              <option value="sms">SMS</option>
               <option value="email">Email</option>
               <option value="facebook">Facebook</option>
               <option value="instagram">Instagram</option>

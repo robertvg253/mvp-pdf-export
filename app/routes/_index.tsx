@@ -7,9 +7,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const session = await supabaseServer.auth.getSession();
   
-  // Si ya está autenticado, redirigir al dashboard
+  // Si ya está autenticado, redirigir al leads
   if (session.data.session) {
-    throw redirect("/dashboard");
+    throw redirect("/leads");
   }
   
   return null;
@@ -54,8 +54,8 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     if (data.user) {
-      // Login exitoso, redirigir al dashboard
-      throw redirect("/dashboard");
+      // Login exitoso, redirigir al leads
+      throw redirect("/leads");
     }
 
     return {

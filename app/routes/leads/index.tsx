@@ -4,8 +4,8 @@ import { supabaseServer } from "~/supabase/supabaseServer";
 import React, { useState } from "react";
 import { formatDateForSupabase, formatDate } from "~/utils/date-helpers";
 import ExportModal from "~/components/ExportModal";
-import UserFilter from "~/components/UserFilter";
 import FilterModal from "~/components/FilterModal";
+import HorizontalFilters from "~/components/HorizontalFilters";
 
 
 // Función loader para obtener datos de contactos con paginación y filtros
@@ -313,35 +313,6 @@ export default function DashboardPage() {
   const totalCampaignContacts = campaignContacts;
   const totalUnassignedContacts = unassignedContacts;
   
-  // Función para manejar cambios de filtros
-  const handleFilterChange = (filterName: string, value: string) => {
-    const newSearchParams = new URLSearchParams(searchParams);
-    
-    // Validación de fechas
-    if (filterName === 'fechaInicio' && value) {
-      const fechaFin = searchParams.get('fechaFin');
-      if (fechaFin && new Date(value) > new Date(fechaFin)) {
-        // Si la fecha de inicio es posterior a la fecha de fin, limpiar fecha de fin
-        newSearchParams.delete('fechaFin');
-      }
-    }
-    
-    if (filterName === 'fechaFin' && value) {
-      const fechaInicio = searchParams.get('fechaInicio');
-      if (fechaInicio && new Date(value) < new Date(fechaInicio)) {
-        // Si la fecha de fin es anterior a la fecha de inicio, limpiar fecha de inicio
-        newSearchParams.delete('fechaInicio');
-      }
-    }
-    
-    if (value) {
-      newSearchParams.set(filterName, value);
-    } else {
-      newSearchParams.delete(filterName);
-    }
-    newSearchParams.delete('page'); // Reset a página 1 cuando se cambia filtro
-    navigate(`?${newSearchParams.toString()}`);
-  };
   
   // Función para manejar paginación
   const handlePageChange = (newPage: number) => {
@@ -391,110 +362,16 @@ export default function DashboardPage() {
   };
 
   const handleClearFilters = () => {
-    navigate('/dashboard');
+    navigate('/leads');
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Layout de dos columnas */}
-      <div className="flex h-screen">
-        
-        {/* Columna izquierda - Panel de Filtros (20%) - FIXED - Hidden on mobile */}
-        <div className="hidden md:block w-1/5 bg-white border-r border-gray-200 p-6 shadow-sm fixed left-0 top-0 h-full overflow-y-auto">
-          {/* Logo */}
-          <div className="flex items-center mb-6">
-            <img 
-              src="/cropped-csg-logo-1.png" 
-              alt="Coope San Gabriel R.L." 
-              className="w-20 h-20 mr-3 object-contain"
-            />
-            <h2 className="text-xl font-bold text-gray-900">Filtros</h2>
-        </div>
-          
-          {/* Filtros */}
-          <div className="space-y-4">
-            {/* Canal */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Canal
-              </label>
-              <select 
-                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 truncate"
-                value={searchParams.get('canal') || ''}
-                onChange={(e) => handleFilterChange('canal', e.target.value)}
-              >
-                <option value="">Todos los canales</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="sms">SMS</option>
-                <option value="email">Email</option>
-                <option value="facebook">Facebook</option>
-                <option value="instagram">Instagram</option>
-              </select>
-      </div>
-
-            {/* Usuario Asignado */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Usuario Asignado
-              </label>
-              <UserFilter
-                users={uniqueUsers || []}
-                selectedUser={searchParams.get('usuarioAsignado') || ''}
-                onUserChange={(user) => handleFilterChange('usuarioAsignado', user)}
-                placeholder="Todos los usuarios"
-              />
-        </div>
-
-            {/* Fecha de Inicio */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fecha de Inicio
-              </label>
-              <input
-                type="date"
-                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                value={searchParams.get('fechaInicio') || ''}
-                max={searchParams.get('fechaFin') || new Date().toISOString().split('T')[0]}
-                onChange={(e) => handleFilterChange('fechaInicio', e.target.value)}
-              />
-      </div>
-
-            {/* Fecha de Fin */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fecha de Fin
-              </label>
-              <input
-                type="date"
-                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                value={searchParams.get('fechaFin') || ''}
-                min={searchParams.get('fechaInicio') || ''}
-                max={new Date().toISOString().split('T')[0]}
-                onChange={(e) => handleFilterChange('fechaFin', e.target.value)}
-              />
-            </div>
-
-            {/* Botón para limpiar filtros */}
-            <div className="pt-4">
-            <button
-                onClick={() => {
-                  navigate('/dashboard');
-                }}
-                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
-              >
-                Limpiar Filtros
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Columna derecha - Contenido Principal (80% desktop, 100% mobile) */}
-        <div className="w-full md:w-4/5 bg-gray-50 p-6 md:ml-[20%] overflow-y-auto">
+    <>
           
           {/* Header con botones */}
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Panel de Control</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
               {hasActiveFilters && (
                 <p className="text-sm text-orange-600 mt-1">
                   ✓ Filtros activos - {totalCount} contactos encontrados
@@ -543,6 +420,9 @@ export default function DashboardPage() {
               </Form>
             </div>
         </div>
+
+          {/* Filtros Horizontales */}
+          <HorizontalFilters uniqueUsers={uniqueUsers || []} />
 
           {/* Sección de Insights (Cajitas) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -733,8 +613,6 @@ export default function DashboardPage() {
       </div>
             </div>
           )}
-        </div>
-      </div>
       
       {/* Modal de Exportación */}
       <ExportModal
@@ -759,6 +637,6 @@ export default function DashboardPage() {
         uniqueUsers={uniqueUsers || []}
       />
       
-    </div>
+    </>
   );
 }

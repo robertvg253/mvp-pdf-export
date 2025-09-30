@@ -5,8 +5,15 @@ export default [
   route("home", "routes/home.tsx"),
   route("test-db", "routes/test-db.tsx"),
   layout("routes/_layout.tsx", [
-    route("dashboard", "routes/dashboard.tsx"),
     route("export-pdf", "routes/export-pdf.tsx"),
-    // Rutas eliminadas: historial, agent, logout, modulo2
+  ]),
+  layout("routes/_app-layout.tsx", [
+    route("leads", "routes/leads/index.tsx"),
+    route("campanas/sms", "routes/campanas/sms/index.tsx"),
+    route("campanas/sms/:campaignNumber", "routes/campanas/sms/$campaignNumber/index.tsx"),
+    route("campanas/email", "routes/campanas/email/index.tsx"),
+    route("campanas/email/:campaignNumber", "routes/campanas/email/$campaignNumber/index.tsx"),
+    route("anuncios", "routes/anuncios/index.tsx"),
+    route("empleados", "routes/empleados/index.tsx"),
   ]),
 ] satisfies RouteConfig;

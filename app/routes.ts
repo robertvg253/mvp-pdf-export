@@ -14,6 +14,7 @@ export default [
     route("campanas/email", "routes/campanas/email/index.tsx"),
     route("campanas/email/:campaignNumber", "routes/campanas/email/$campaignNumber/index.tsx"),
     route("anuncios", "routes/anuncios/index.tsx"),
+    route("reportes", "routes/reportes/index.tsx"),
     route("empleados", "routes/empleados/index.tsx"),
   ]),
 ] satisfies RouteConfig;

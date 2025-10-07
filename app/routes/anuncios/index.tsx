@@ -25,56 +25,81 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw redirect("/");
   }
 
-  // Obtener todos los anuncios
-  const { data: ads, error: adsError } = await supabaseAdmin
-    .from('anuncios')
-    .select('*');
+  // Intentar obtener anuncios con efectividad usando RPC primero
+  let ads, adsError;
+  
+  try {
+    const rpcResult = await supabaseAdmin.rpc('get_anuncios_with_effectiveness');
+    ads = rpcResult.data;
+    adsError = rpcResult.error;
+  } catch (error) {
+    console.log("🔄 RPC no disponible, usando consulta directa...");
+    ads = null;
+    adsError = { message: "RPC function not found" };
+  }
 
-  if (adsError) {
-    console.error("Error al obtener anuncios:", adsError);
+  if (adsError || !ads) {
+    console.log("🔄 Usando consulta directa como fallback...");
+    
+    // Fallback: consulta directa simple
+    const { data: fallbackAds, error: fallbackError } = await supabaseAdmin
+      .from('anuncios')
+      .select('id_meta_ads, campaign_name, ad_set_name, ads_name')
+      .order('campaign_name', { ascending: true })
+      .order('ad_set_name', { ascending: true })
+      .order('ads_name', { ascending: true });
+
+    if (fallbackError) {
+      console.error("Error en fallback:", fallbackError);
+      return {
+        user: session.data.session.user,
+        role: userRole?.role || 'editor',
+        ads: []
+      };
+    }
+
+    // Obtener contactos para calcular efectividad
+    const { data: contacts, error: contactsError } = await supabaseAdmin
+      .from('contactos')
+      .select('whatsapp_cloud_ad_source_id')
+      .not('whatsapp_cloud_ad_source_id', 'is', null);
+
+    if (contactsError) {
+      console.error("Error al obtener contactos:", contactsError);
+    }
+
+    // Calcular efectividad manualmente
+    const adsWithEffectiveness = (fallbackAds || []).map(ad => {
+      const contactCount = (contacts || []).filter(contact => 
+        contact.whatsapp_cloud_ad_source_id === ad.id_meta_ads
+      ).length;
+
+      return {
+        id_meta_ads: ad.id_meta_ads,
+        campaign_name: ad.campaign_name,
+        ad_set_name: ad.ad_set_name,
+        ads_name: ad.ads_name,
+        efectividad: contactCount
+      };
+    });
+
+    console.log("📊 Anuncios cargados con efectividad (fallback):", adsWithEffectiveness.length);
+    console.log("📈 Total de contactos generados:", adsWithEffectiveness.reduce((sum: number, ad: any) => sum + ad.efectividad, 0));
+
     return {
       user: session.data.session.user,
       role: userRole?.role || 'editor',
-      ads: []
+      ads: adsWithEffectiveness
     };
   }
 
-  console.log("📊 Anuncios obtenidos:", ads?.length || 0);
-
-  // Obtener todos los contactos con sus whatsapp_cloud_ad_source_id para hacer el cruce
-  const { data: contacts, error: contactsError } = await supabaseAdmin
-    .from('contactos')
-    .select('whatsapp_cloud_ad_source_id')
-    .not('whatsapp_cloud_ad_source_id', 'is', null);
-
-  if (contactsError) {
-    console.error("Error al obtener contactos:", contactsError);
-  }
-
-  console.log("📞 Contactos obtenidos:", contacts?.length || 0);
-
-  // Calcular efectividad usando cruce en memoria (más eficiente)
-  const adsWithEffectiveness = (ads || []).map(ad => {
-    // Contar cuántos contactos tienen este id_meta_ads
-    const leadsCount = (contacts || []).filter(contact => 
-      contact.whatsapp_cloud_ad_source_id === ad.id_meta_ads
-    ).length;
-
-    console.log(`📈 Anuncio ${ad.id_meta_ads}: ${leadsCount} leads`);
-    
-    return {
-      ...ad,
-      leads_count: leadsCount
-    };
-  });
-
-  console.log("📊 Anuncios cargados con efectividad:", adsWithEffectiveness.length);
-  console.log("📈 Total de leads generados:", adsWithEffectiveness.reduce((sum, ad) => sum + ad.leads_count, 0));
+  console.log("📊 Anuncios obtenidos con efectividad real:", ads?.length || 0);
+  console.log("📈 Total de contactos generados:", ads?.reduce((sum: number, ad: any) => sum + (ad.efectividad || 0), 0) || 0);
 
   return {
     user: session.data.session.user,
     role: userRole?.role || 'editor',
-    ads: adsWithEffectiveness
+    ads: ads || []
   };
 }
 
@@ -235,7 +260,8 @@ export default function AnunciosPage() {
     }
   }, [actionData?.success, navigate]);
 
-  const totalLeads = ads.reduce((sum, ad) => sum + ad.leads_count, 0);
+  const totalAds = ads.length;
+  const totalEffectiveness = ads.reduce((sum: number, ad: any) => sum + (ad.efectividad || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -265,15 +291,15 @@ export default function AnunciosPage() {
             </button>
             <button 
               onClick={() => {
-                // Create CSV content
+                // Create CSV content with new structure
                 const csvContent = [
-                  ['ID Meta Ads', 'Nombre', 'Estado', 'Campaign ID', 'Leads Generados'],
-                  ...ads.map(ad => [
+                  ['ID Meta', 'Nombre de la Campaña', 'Nombre del Grupo de Anuncio', 'Nombre del Anuncio', 'Efectividad'],
+                  ...ads.map((ad: any) => [
                     ad.id_meta_ads,
-                    ad.name,
-                    ad.status,
-                    ad.campaign_id,
-                    ad.leads_count.toString()
+                    ad.campaign_name || '',
+                    ad.ad_set_name || '',
+                    ad.ads_name,
+                    ad.efectividad.toString()
                   ])
                 ].map(row => row.join(',')).join('\n');
 
@@ -282,7 +308,7 @@ export default function AnunciosPage() {
                 const link = document.createElement('a');
                 const url = URL.createObjectURL(blob);
                 link.setAttribute('href', url);
-                link.setAttribute('download', `anuncios_efectividad_${new Date().toISOString().split('T')[0]}.csv`);
+                link.setAttribute('download', `anuncios_jerarquia_${new Date().toISOString().split('T')[0]}.csv`);
                 link.style.visibility = 'hidden';
                 document.body.appendChild(link);
                 link.click();
@@ -299,23 +325,29 @@ export default function AnunciosPage() {
         </div>
       </div>
 
-      {/* Resumen de Efectividad */}
+      {/* Resumen de Anuncios */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Resumen de Efectividad</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Resumen de Anuncios</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 p-4 rounded-lg">
             <h3 className="text-sm font-medium text-blue-900">Total de Anuncios</h3>
-            <p className="text-2xl font-bold text-blue-700">{ads.length}</p>
+            <p className="text-2xl font-bold text-blue-700">{totalAds}</p>
           </div>
           <div className="bg-green-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-green-900">Total de Leads</h3>
-            <p className="text-2xl font-bold text-green-700">{totalLeads}</p>
+            <h3 className="text-sm font-medium text-green-900">Campañas Únicas</h3>
+            <p className="text-2xl font-bold text-green-700">
+              {[...new Set(ads.map((ad: any) => ad.campaign_name).filter(Boolean))].length}
+            </p>
           </div>
           <div className="bg-purple-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-purple-900">Promedio por Anuncio</h3>
+            <h3 className="text-sm font-medium text-purple-900">Grupos de Anuncios</h3>
             <p className="text-2xl font-bold text-purple-700">
-              {ads.length > 0 ? Math.round(totalLeads / ads.length) : 0}
+              {[...new Set(ads.map((ad: any) => ad.ad_set_name).filter(Boolean))].length}
             </p>
+          </div>
+          <div className="bg-orange-50 p-4 rounded-lg">
+            <h3 className="text-sm font-medium text-orange-900">Total de Contactos</h3>
+            <p className="text-2xl font-bold text-orange-700">{totalEffectiveness}</p>
           </div>
         </div>
       </div>
@@ -336,7 +368,7 @@ export default function AnunciosPage() {
       {/* Tabla de Anuncios */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Anuncios y Efectividad</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Anuncios por Jerarquía</h2>
         </div>
         
         {ads.length === 0 ? (
@@ -353,27 +385,24 @@ export default function AnunciosPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    ID Meta Ads
+                    ID Meta
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Nombre de la Campaña
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Nombre del Grupo de Anuncio
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Nombre del Anuncio
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Estado
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Campaign ID
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Efectividad (Leads)
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Fecha de Creación
+                    Efectividad
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {ads.map((ad) => (
+                {ads.map((ad: any) => (
                   <tr key={ad.id_meta_ads} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
@@ -381,39 +410,24 @@ export default function AnunciosPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{ad.name}</div>
+                      <div className="text-sm text-gray-900">{ad.campaign_name || 'Sin campaña'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        ad.status === 'ACTIVE' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {ad.status}
-                      </span>
+                      <div className="text-sm text-gray-900">{ad.ad_set_name || 'Sin grupo'}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {ad.campaign_id}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{ad.ads_name}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          ad.leads_count > 0 
+                          ad.efectividad > 0 
                             ? 'bg-green-100 text-green-800' 
                             : 'bg-gray-100 text-gray-800'
                         }`}>
-                          {ad.leads_count} leads
+                          {ad.efectividad} contactos
                         </span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(ad.created_at).toLocaleDateString('es-ES', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
                     </td>
                   </tr>
                 ))}
